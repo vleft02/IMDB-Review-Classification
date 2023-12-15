@@ -8,3 +8,6 @@ Performance comparison of said implementations with the Scikit-learn implementat
 
 ## Part C :
  Comparison of the results of Parts A and B with the results of an MLP with a sliding window and/or an RNN, implemented in Tensorflow/Keras, representing words with word embeddings.
+
+ ## To install
+ Run pip install -r requirements.txt
