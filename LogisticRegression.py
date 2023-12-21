@@ -1,11 +1,13 @@
+import numpy as np
+
 class LogisticRegression():
-   
+
 
     def __init__(self,epochs=20,learning_rate=0.01):
         self.epochs=epochs;
         self.learning_rate=learning_rate;
         self.weights = np.array([])
-        
+
     
 
     def sigmoid(t):
