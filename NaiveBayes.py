@@ -1,4 +1,4 @@
-import numpy as np 
+import numpy as np
 
 class NaiveBayes: 
     def __init__(self):
@@ -13,19 +13,22 @@ class NaiveBayes:
 
         numberOfExamples = x_train.shape[0]
         numberOfFeatures = x_train.shape[1]
+        x_train = x_train.toarray()
+        #y_train = y_train.flatten()
 
         positiveReviews = 0
         for label in y_train: 
             if label == 1: 
                 positiveReviews += 1 
 
-        self.probY = positiveReviews / len(y_train)
+        self.probabilityC1 = positiveReviews / len(y_train)
 
         '''
         C0: P( X(i) = 0 | C = 0) and C1 = P ( X(i) = 0 | C = 1)
         P( X(i) = 1 | C = 0) = 1 - P( X(i) = 0 | C = 0) and P( X(i) = 1 | C = 1) = P( X(i) = 0 | C = 1)
         '''
-        self.boundProbabilityC0, self.boundProbabilityC1 = np.zeros(numberOfFeatures)  
+        self.boundProbabilityC0 = np.zeros(numberOfFeatures)  
+        self.boundProbabilityC1 = np.zeros(numberOfFeatures)
         for i in range(numberOfFeatures): 
 
             #For every word that is not on a review add to the array correspnding to the review result of the example 
@@ -38,27 +41,28 @@ class NaiveBayes:
         Adding Laplace estimator with an alpha value of 1 
         """
         self.boundProbabilityC0 = [x + 1 / (numberOfExamples - positiveReviews + x) for x in self.boundProbabilityC0] 
-        self.boundProbabilityC1 = [x + 1 / (positiveReviews+ x) for x in self.boundProbabilityc1]
+        self.boundProbabilityC1 = [x + 1 / (positiveReviews+ x) for x in self.boundProbabilityC1]
 
-    def predict(self, x_dev, y_dev):
+    def predict(self, x_test, y_test):
         prediction = list()
         c1 = self.boundProbabilityC1
         c0 = self.boundProbabilityC0
-        numberOfFeatures = x_dev.shape[1]
+        numberOfFeatures = x_test.shape[1]
+        x_test = x_test.toarray()
 
-        for x in x_dev: 
+        for x in range(x_test.shape[0]): 
             positiveReviewProbability = self.probabilityC1 
             negativeReviewProbability = (1 - self.probabilityC1)
 
             for y in range(numberOfFeatures):
-                if x_dev[x][y] == 0 and y_dev[x] == 0: 
-                    negativeReviewProbability = negativeReviewProbability * self.boundProbabilityC0[y]
-                elif  x_dev[x][y] == 1 and y_dev[x] == 0: 
-                    negativeReviewProbability = negativeReviewProbability * (1 - self.booundProbabilityC0[y])
-                elif  x_dev[x][y] == 0 and y_dev[x] == 1:
-                    positiveReviewProbability = positiveReviewProbability * self.boundProbabilityC1
-                elif  x_dev[x][y] == 1 and y_dev[x] == 1:
-                    positiveReviewProbability = positiveReviewProbability * (1 - self.boundProbabilityC1)
+                if x_test[x][y] == 0 and y_test[x] == 0: 
+                    negativeReviewProbability = round(negativeReviewProbability * self.boundProbabilityC0[y], 2)
+                elif  x_test[x][y] == 1 and y_test[x] == 0: 
+                    negativeReviewProbability = round(negativeReviewProbability * (1 - self.boundProbabilityC0[y]), 2)
+                elif  x_test[x][y] == 0 and y_test[x] == 1:
+                    positiveReviewProbability = round(positiveReviewProbability * self.boundProbabilityC1[y], 2)
+                elif  x_test[x][y] == 1 and y_test[x] == 1:
+                    positiveReviewProbability = round(positiveReviewProbability * (1 - self.boundProbabilityC1[y]), 2)
 
             if positiveReviewProbability > negativeReviewProbability: 
                 prediction.append(1)
