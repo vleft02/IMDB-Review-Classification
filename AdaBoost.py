@@ -1,44 +1,65 @@
-import numpy as np
-import random as random
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
+from sklearn import tree
 
 class AdaBoost:
-    def __init__(self):
-        self.M = None
-        self.models = []
+    def __init__(self,amount_of_says=None, models = None):
+        self.models = models if models is not None else []
         self.weights = []
-        self.amount_of_says = []
+        self.amount_of_says = amount_of_says if amount_of_says is not None else []
     
-    def fit (self, x_train_input, y_train_input, M):
+    def get_params(self, deep=True):
+        return {'amount_of_says': self.amount_of_says,
+                'models': self.models,
+                }
+
+    def fit (self, x_train_input, y_train_input, M,learning_curve=False):
         split_index = int(0.8 * x_train_input.shape[0])  # 80% for training, 20% for dev
         x_train, y_train = x_train_input[:split_index], y_train_input[:split_index]
         x_dev, y_dev= x_train_input[split_index:], y_train_input[split_index:]
         x_train = x_train.toarray()
-    
-        self.M = M
-        # initializing weights equally
-        self.weights = np.ones(x_train.shape[0]) * (1 / x_train.shape[0])
-        stump = CreateStump()
-        m = 0 
-        while m < M:
-            # update the data according to the weights
-            weighted_indices = np.random.choice(x_train.shape[0], size=x_train.shape[0], replace=True, p=self.weights)
-            x_train_weighted, y_train_weighted = x_train[weighted_indices], y_train[weighted_indices]
 
+        # initializing weights equally
+        self.weights = np.ones(x_train.shape[0]) / x_train.shape[0]
+        m = 0 
+        epsilon = 1e-10                                                     # Small epsilon value to avoid division by zero
+        while m < M:
+            stump = tree.DecisionTreeClassifier(max_depth=1)
             # create the base learner (decision stumps)
-            best_stump = stump.fit( x_train_weighted, y_train_weighted, self.weights)
-            self.change_weights(best_stump['predictions'], y_train, best_stump['amount_of_say'])
-            if best_stump['error'] >= 0.55:
+            stump = stump.fit(x_train,y_train,self.weights)
+            y_pred = stump.predict(x_train)
+            error = self.calculate_error(y_train, y_pred, self.weights)
+            alpha = np.log((1-error)/(error+epsilon))
+            self.change_weights(y_pred, y_train, alpha)
+            x_train, y_train = self.updateData(x_train, y_train)
+            if error >= 0.5:
                 m -= 1
             else:
-                self.models.append(best_stump)
-                self.amount_of_says.append(best_stump['amount_of_say'])
+                self.models.append(stump)
+                self.amount_of_says.append(alpha)
                 m +=1
-                
-            print(f"Iteration {m}: amount_of_say = {best_stump['amount_of_say']}, Error = {best_stump['error']}")
+            print(f"Iteration {m}: amount_of_say = {alpha}, Error = {error}")
 
         y_dev_predicted = self.predict(x_dev)
         return self.evaluate(y_dev,y_dev_predicted)
+
+    def calculate_error(self, y, y_pred, w):
+        return (sum(w*(np.not_equal(y, y_pred)).astype(int)))
+
+    # make a new empty dataset the same size as the original and pick a random number [0..1)
+    # and see where that number falls when the sample weights are used like a distribution
+    # fill the new dataset with those values 
+    def updateData(self, x, y):
+        distribution = np.cumsum(self.weights)
+        newDataset = np.zeros_like(x)
+        temp_y = np.zeros_like(y)
+        for i in range (x.shape[0]):
+            number = np.random.rand()
+            index = np.searchsorted(distribution, number)
+            newDataset[i, :] = x[index, :]
+            temp_y[i] = y[index]
+        self.weights = np.ones(x.shape[0]) / x.shape[0]
+
+        return newDataset, temp_y
 
     # increase the weights of false predictions and decrease the others 
     def change_weights(self, pred, y, amount_of_say):
@@ -46,20 +67,17 @@ class AdaBoost:
             if ((pred[i]==y[i])):
                 self.weights[i] *= np.exp(-amount_of_say)
             else:
-                self.weights[i] *= np.exp(2*amount_of_say)
+                self.weights[i] *= np.exp(amount_of_say)
         # normalize the weights
-        total_weight = np.sum(self.weights)
-        self.weights /= total_weight if total_weight != 0 else np.ones_like(self.weights) / len(self.weights)
+        # total_weight = np.sum(self.weights)
+        self.weights = self.weights/np.sum(self.weights)
 
         
     def predict(self, x_test):
         x_test = x_test.toarray()
         predictions = np.zeros(x_test.shape[0])
         for i in range(len(self.models)):
-            stump = self.models[i]
-            word_values = x_test[:, stump['word']]
-            stump_predictions = np.where(word_values == stump['threshold'], 1,0)
-            predictions += self.amount_of_says[i] * stump_predictions
+            predictions += self.amount_of_says[i] * self.models[i].predict(x_test)
 
         # Final prediction is based on the sign of the weighted sum
         final_predictions = np.sign(predictions)
@@ -72,61 +90,10 @@ class AdaBoost:
         precision = precision_score(y_true, y_predicted)
         print("Precision:", precision)
 
+        # Compute recall
         recall = recall_score(y_true, y_predicted)
         print("Recall:", recall)
 
+        # Compute F1 score
         f1 = f1_score(y_true, y_predicted)
         print("F1 Score:", f1)
-
-
-class CreateStump:
-    def __init__(self):
-        self.weighted_errors = None
-
-    def fit(self, x, y, w):
-        best_stump = {
-            'word': None,
-            'threshold': None,
-            'error': None,
-            'amount_of_say': None,
-            'predictions': None,
-            'ig': float('-inf')
-        }
-        # we create a stump for each feature, in this case for each word
-        for word in range(x.shape[1]):
-            for threshold in [0,1]:
-                predictions = (x[:, word] == threshold).astype(int)
-
-                epsilon = 1e-10                                                     # Small epsilon value to avoid division by zero
-                cor_pos = np.sum((predictions == 1) & (y == 1))                     # classified as positive correctly
-                cor_neg = np.sum((predictions == 0) & (y == 0))                     # classified as negative correctly
-                incor_pos = np.sum((predictions == 1) & (y == 0))                   # classified as positive incorrectly
-                incor_neg = np.sum((predictions == 0) & (y == 1))                   # classified as negative incorrectly
-
-                total = (cor_pos+cor_neg+incor_neg+incor_pos)                       # total sum of predictions
-
-                p_cor_pos = cor_pos/(cor_pos+cor_neg)                               # probability of something being classified as positive correctly
-                p_cor_neg = cor_neg/(cor_pos+cor_neg)                               # probability of something being classified as negative correctly
-                child_entropy1 = - p_cor_neg*np.log2(p_cor_neg+epsilon) - p_cor_pos*np.log2(p_cor_pos+epsilon)          # entropy of correctly classified data
-
-                p_incor_pos = incor_pos/(incor_pos+incor_neg)                       # probability of something being classified as positive incorrectly
-                p_incor_neg = incor_neg/(incor_pos+incor_neg)                       # probability of something being classified as negative incorrectly
-                child_entropy2 = - p_incor_neg*np.log2(p_incor_neg+epsilon) - p_incor_pos*np.log2(p_incor_pos+epsilon)  # entropy of incorrectly classified data
-
-                parent_entropy = - ((cor_pos+incor_pos)/total*np.log2((cor_pos+incor_pos)/total+epsilon))- ((cor_neg+incor_neg)/total*np.log2((cor_neg+incor_neg)/total+epsilon))
-                cor_pred = (cor_pos+cor_neg)/total                                  
-                incor_pred = (incor_pos+incor_neg)/total
-                average_child_entropy = (cor_pred*child_entropy1)+(incor_pred*child_entropy2)
-                information_gain = parent_entropy - average_child_entropy
-
-                # chose the stump with the highest information gain 
-                if information_gain > best_stump['ig']:
-                    self.weighted_errors = (sum(w*(np.not_equal(y, predictions)).astype(int)))/sum(w)
-                    best_stump['word'] = word
-                    best_stump['threshold'] = threshold
-                    best_stump['error'] = self.weighted_errors
-                    best_stump['predictions'] = predictions
-                    best_stump['ig'] = information_gain
-
-        best_stump['amount_of_say'] = (1/2) * np.log(((1 - self.weighted_errors )/self.weighted_errors+epsilon))
-        return best_stump
