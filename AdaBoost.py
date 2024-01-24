@@ -18,17 +18,19 @@ class AdaBoost:
         x_dev, y_dev= x_train_input[split_index:], y_train_input[split_index:]
         x_train = x_train.toarray()
 
+        y_train = 2 * y_train - 1
+        y_dev = 2 * y_dev - 1
         # initializing weights equally
         self.weights = np.ones(x_train.shape[0]) / x_train.shape[0]
         m = 0 
         epsilon = 1e-10                                                     # Small epsilon value to avoid division by zero
         while m < M:
-            stump = tree.DecisionTreeClassifier(max_depth=1)
             # create the base learner (decision stumps)
+            stump = tree.DecisionTreeClassifier(max_depth=1)
             stump = stump.fit(x_train,y_train,self.weights)
             y_pred = stump.predict(x_train)
             error = self.calculate_error(y_train, y_pred, self.weights)
-            alpha = np.log((1-error)/(error+epsilon))
+            alpha =1/2 *np.log((1-error)/(error+epsilon))
             self.change_weights(y_pred, y_train, alpha)
             x_train, y_train = self.updateData(x_train, y_train)
             if error >= 0.5:
@@ -37,8 +39,6 @@ class AdaBoost:
                 self.models.append(stump)
                 self.amount_of_says.append(alpha)
                 m +=1
-            print(f"Iteration {m}: amount_of_say = {alpha}, Error = {error}")
-
         y_dev_predicted = self.predict(x_dev)
         return self.evaluate(y_dev,y_dev_predicted)
 
@@ -69,7 +69,6 @@ class AdaBoost:
             else:
                 self.weights[i] *= np.exp(amount_of_say)
         # normalize the weights
-        # total_weight = np.sum(self.weights)
         self.weights = self.weights/np.sum(self.weights)
 
         
@@ -77,13 +76,15 @@ class AdaBoost:
         x_test = x_test.toarray()
         predictions = np.zeros(x_test.shape[0])
         for i in range(len(self.models)):
-            predictions += self.amount_of_says[i] * self.models[i].predict(x_test)
-
+            stump = self.models[i].predict(x_test)
+            for example in range(x_test.shape[0]):
+                predictions[example] += self.amount_of_says[i] * stump[example]
         # Final prediction is based on the sign of the weighted sum
-        final_predictions = np.sign(predictions)
+        final_predictions = np.where(predictions >= 0, 1, -1)
         return final_predictions
     
     def evaluate(self, y_true, y_predicted):
+        
         accuracy = accuracy_score(y_true, y_predicted)
         print("Accuracy:", accuracy)
 
