@@ -1,4 +1,4 @@
-# machine-learning-algorithms
+# IMDB Review Sentiment Analysis
 
 ## Part A : 
 Implementations of 3 different machine learning algorithms for text classification of movie reviews from the "IMDB dataset" into two (distinct) categories (e.g., positive/negative sentiment).
